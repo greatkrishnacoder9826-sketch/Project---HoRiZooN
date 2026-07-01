@@ -3,18 +3,16 @@ python-dotenv
 yt-dlp
 pydub
 audioop-lts; python_version >= "3.13"
+requests
+
 langchain-core
 langchain-text-splitters
 langchain-chroma
 langchain-huggingface
 langchain-mistralai
-faster-whisper
-requests
+
+chromadb
 sentence-transformers
-
-torchaudio
-
-<<<<<<< HEAD
 transformers
-sentence-transformers
-langchain-huggingface
+
+faster-whisper
