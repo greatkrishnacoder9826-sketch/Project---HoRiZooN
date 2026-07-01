@@ -12,8 +12,13 @@ faster-whisper
 requests
 sentence-transformers
 torch
+torchvision
 torchaudio
 torch
 torchvision
+<<<<<<< HEAD
 transformers
 sentence-transformers
+=======
+sentence-transformers
+>>>>>>> 707f983 (fix: add torchvision dependency)
