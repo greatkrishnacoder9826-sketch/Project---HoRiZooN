@@ -54,13 +54,11 @@ print(f"Using ffmpeg from: {FFMPEG_PATH}")
 
 
 def get_cookies_file() -> str | None:
-    # Pehle local cookies.txt check karo
     local_cookies = "cookies.txt"
     if os.path.isfile(local_cookies):
         print("Using local cookies.txt")
         return local_cookies
 
-    # Streamlit secrets se check karo
     try:
         import streamlit as st
         cookies_content = st.secrets.get("YOUTUBE_COOKIES", None)
@@ -78,7 +76,6 @@ def get_cookies_file() -> str | None:
     except Exception:
         pass
 
-    # Env variable se try karo
     cookies_content = os.getenv("YOUTUBE_COOKIES")
     if cookies_content:
         tmp = tempfile.NamedTemporaryFile(
@@ -98,13 +95,13 @@ def get_cookies_file() -> str | None:
 def download_youtube_audio(url: str) -> str:
     output_path = os.path.join(DOWNLOAD_DIR, "%(title)s.%(ext)s")
 
-    ydl_opts = {                                        # ✅ function ke andar
-        "format": "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best",
+    ydl_opts = {
+        "format": "140/bestaudio[protocol=https]/bestaudio",
         "outtmpl": output_path,
         "ffmpeg_location": FFMPEG_PATH,
         "extractor_args": {
             "youtube": {
-                "player_client": ["tv_embedded", "mweb"],
+                "skip": ["dash", "hls"],
             }
         },
         "postprocessors": [
