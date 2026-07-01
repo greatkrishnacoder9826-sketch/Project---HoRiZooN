@@ -4,6 +4,7 @@ import os
 import platform
 import shutil
 import glob
+import tempfile
 
 DOWNLOAD_DIR = "downloads"
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
@@ -14,20 +15,11 @@ FFPROBE_EXE_NAME = "ffprobe.exe" if IS_WINDOWS else "ffprobe"
 
 
 def find_ffmpeg_dir() -> str:
-    """
-    ffmpeg/ffprobe ko dhoondta hai:
-    1. Pehle system PATH mein check karta hai (shutil.which) — Linux/Streamlit Cloud
-       par packages.txt se installed ffmpeg yahin milega.
-    2. Windows par WinGet ke common install location mein glob se search karta hai
-       (hardcoded version folder ki jagah).
-    3. Agar kahin nahi mila, clear error deta hai
-    """
     ffmpeg_in_path = shutil.which("ffmpeg")
     if ffmpeg_in_path:
         return os.path.dirname(ffmpeg_in_path)
 
     if IS_WINDOWS:
-        # WinGet ke under version folder ka naam badalta rehta hai (e.g. ffmpeg-8.1.1-full_build)
         winget_pattern = os.path.expandvars(
             r"%LOCALAPPDATA%\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-*-full_build\bin"
         )
@@ -37,16 +29,12 @@ def find_ffmpeg_dir() -> str:
                 return match
 
     raise FileNotFoundError(
-        "ffmpeg nahi mila! Windows par 'winget install Gyan.FFmpeg' chalao aur terminal "
-        "restart karo. Linux/Streamlit Cloud par packages.txt mein 'ffmpeg' add karo, "
-        "ya FFMPEG_PATH env variable set karo apne ffmpeg bin folder ke path se."
+        "ffmpeg nahi mila! Windows par 'winget install Gyan.FFmpeg' chalao. "
+        "Linux/Streamlit Cloud par packages.txt mein 'ffmpeg' add karo."
     )
 
 
-# Agar user ne env variable se manually path diya hai to wahi use karo,
-# warna auto-detect karo
 FFMPEG_PATH = os.getenv("FFMPEG_PATH") or find_ffmpeg_dir()
-
 ffmpeg_exe = os.path.join(FFMPEG_PATH, FFMPEG_EXE_NAME)
 ffprobe_exe = os.path.join(FFMPEG_PATH, FFPROBE_EXE_NAME)
 
@@ -54,30 +42,67 @@ if not os.path.isfile(ffmpeg_exe):
     raise FileNotFoundError(f"{FFMPEG_EXE_NAME} nahi mila yaha: {ffmpeg_exe}")
 
 if not os.path.isfile(ffprobe_exe):
-    raise FileNotFoundError(
-        f"{FFPROBE_EXE_NAME} nahi mila yaha: {ffprobe_exe}\n"
-        "Iska matlab aapka ffmpeg install incomplete hai (sirf ffmpeg hai, ffprobe nahi). "
-        "Windows: 'winget uninstall Gyan.FFmpeg' karke phir 'winget install Gyan.FFmpeg' se "
-        "fresh full_build install karo, ya https://www.gyan.dev/ffmpeg/builds/ se "
-        "'ffmpeg-release-full' zip manually download karke usme se ffmpeg.exe aur ffprobe.exe "
-        "dono ek hi bin folder mein rakho."
-    )
+    raise FileNotFoundError(f"{FFPROBE_EXE_NAME} nahi mila yaha: {ffprobe_exe}")
 
 AudioSegment.converter = ffmpeg_exe
 AudioSegment.ffprobe   = ffprobe_exe
 
-# IMPORTANT: pydub ka internal mediainfo_json (probing ke liye) AudioSegment.ffprobe
-# attribute ko IGNORE karta hai — wo sirf system PATH mein "ffprobe" naam dhoondta hai
-# (apne which() helper se). Isliye sirf attribute set karna kaafi nahi hai —
-# ffmpeg ka bin folder PATH mein bhi add karna zaroori hai, warna probing step
-# par phir se WinError 2 aayega.
 if FFMPEG_PATH not in os.environ["PATH"]:
     os.environ["PATH"] = FFMPEG_PATH + os.pathsep + os.environ["PATH"]
 
 print(f"Using ffmpeg from: {FFMPEG_PATH}")
 
+
+def get_cookies_file() -> str | None:
+    """
+    Streamlit secrets ya env variable se YouTube cookies.txt file banata hai.
+    Local development ke liye: project root me cookies.txt rakho.
+    Streamlit Cloud ke liye: Secrets me YOUTUBE_COOKIES key add karo.
+    """
+    # Pehle local cookies.txt check karo (local development ke liye)
+    local_cookies = "cookies.txt"
+    if os.path.isfile(local_cookies):
+        print("Using local cookies.txt")
+        return local_cookies
+
+    # Phir Streamlit secrets check karo (Cloud deployment ke liye)
+    try:
+        import streamlit as st
+        cookies_content = st.secrets.get("YOUTUBE_COOKIES", None)
+        if cookies_content:
+            tmp = tempfile.NamedTemporaryFile(
+                mode='w',
+                suffix='.txt',
+                delete=False,
+                encoding='utf-8'
+            )
+            tmp.write(cookies_content)
+            tmp.close()
+            print("Using cookies from Streamlit secrets")
+            return tmp.name
+    except Exception:
+        pass
+
+    # Env variable se bhi try karo
+    cookies_content = os.getenv("YOUTUBE_COOKIES")
+    if cookies_content:
+        tmp = tempfile.NamedTemporaryFile(
+            mode='w',
+            suffix='.txt',
+            delete=False,
+            encoding='utf-8'
+        )
+        tmp.write(cookies_content)
+        tmp.close()
+        return tmp.name
+
+    print("Warning: No cookies found — YouTube may block download (403)")
+    return None
+
+
 def download_youtube_audio(url: str) -> str:
     output_path = os.path.join(DOWNLOAD_DIR, "%(title)s.%(ext)s")
+
     ydl_opts = {
         "format": "bestaudio/best",
         "outtmpl": output_path,
@@ -89,37 +114,56 @@ def download_youtube_audio(url: str) -> str:
                 "preferredquality": "192",
             }
         ],
+        # Bot detection se bachne ke liye browser jaisa header
+        "http_headers": {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        },
     }
+
+    # Cookies available hain toh add karo
+    cookies_file = get_cookies_file()
+    if cookies_file:
+        ydl_opts["cookiefile"] = cookies_file
+
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
         filename = ydl.prepare_filename(info).replace(".webm", ".wav").replace(".m4a", ".wav")
+
+    # Temporary cookies file cleanup
+    if cookies_file and cookies_file != "cookies.txt":
+        try:
+            os.unlink(cookies_file)
+        except Exception:
+            pass
+
     return filename
 
+
 def convert_to_wav(input_path: str) -> str:
-    """Convert any audio/video to wav format using pydub"""
     output_path = os.path.splitext(input_path)[0] + "_convert.wav"
     audio = AudioSegment.from_file(input_path)
     audio = audio.set_channels(1).set_frame_rate(16000)
     audio.export(output_path, format="wav")
     return output_path
 
+
 def split_audio(wav_path: str, chunk_minutes: int = 10) -> list:
     audio = AudioSegment.from_wav(wav_path)
     chunk_ms = chunk_minutes * 60 * 1000
     chunks = []
     for i, start in enumerate(range(0, len(audio), chunk_ms)):
-        chunk = audio[start : start + chunk_ms]
+        chunk = audio[start: start + chunk_ms]
         chunk_path = f"{wav_path}_chunk_{i}.wav"
         chunk.export(chunk_path, format="wav")
         chunks.append(chunk_path)
     return chunks
 
+
 def process_input(source: str) -> list:
-    """URL ya local file — dono handle karta hai"""
     if source.startswith("http://") or source.startswith("https://"):
         print("Detected YouTube URL. Downloading audio...")
-        wav_path = download_youtube_audio(source)  # pehle download
-        converted = convert_to_wav(wav_path)        # phir convert
+        wav_path = download_youtube_audio(source)
+        converted = convert_to_wav(wav_path)
     else:
         print("Detected local file. Converting to wav...")
         converted = convert_to_wav(source)
