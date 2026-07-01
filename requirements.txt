@@ -13,3 +13,7 @@ requests
 sentence-transformers
 torch
 torchaudio
+torch
+torchvision
+transformers
+sentence-transformers
