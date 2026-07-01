@@ -54,18 +54,13 @@ print(f"Using ffmpeg from: {FFMPEG_PATH}")
 
 
 def get_cookies_file() -> str | None:
-    """
-    Streamlit secrets ya env variable se YouTube cookies.txt file banata hai.
-    Local development ke liye: project root me cookies.txt rakho.
-    Streamlit Cloud ke liye: Secrets me YOUTUBE_COOKIES key add karo.
-    """
-    # Pehle local cookies.txt check karo (local development ke liye)
+    # Pehle local cookies.txt check karo
     local_cookies = "cookies.txt"
     if os.path.isfile(local_cookies):
         print("Using local cookies.txt")
         return local_cookies
 
-    # Phir Streamlit secrets check karo (Cloud deployment ke liye)
+    # Streamlit secrets se check karo
     try:
         import streamlit as st
         cookies_content = st.secrets.get("YOUTUBE_COOKIES", None)
@@ -83,7 +78,7 @@ def get_cookies_file() -> str | None:
     except Exception:
         pass
 
-    # Env variable se bhi try karo
+    # Env variable se try karo
     cookies_content = os.getenv("YOUTUBE_COOKIES")
     if cookies_content:
         tmp = tempfile.NamedTemporaryFile(
@@ -103,10 +98,15 @@ def get_cookies_file() -> str | None:
 def download_youtube_audio(url: str) -> str:
     output_path = os.path.join(DOWNLOAD_DIR, "%(title)s.%(ext)s")
 
-    ydl_opts = {
+    ydl_opts = {                                        # ✅ function ke andar
         "format": "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best",
         "outtmpl": output_path,
         "ffmpeg_location": FFMPEG_PATH,
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["ios", "android"],
+            }
+        },
         "postprocessors": [
             {
                 "key": "FFmpegExtractAudio",
@@ -114,13 +114,11 @@ def download_youtube_audio(url: str) -> str:
                 "preferredquality": "192",
             }
         ],
-        # Bot detection se bachne ke liye browser jaisa header
         "http_headers": {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         },
     }
 
-    # Cookies available hain toh add karo
     cookies_file = get_cookies_file()
     if cookies_file:
         ydl_opts["cookiefile"] = cookies_file
@@ -129,7 +127,6 @@ def download_youtube_audio(url: str) -> str:
         info = ydl.extract_info(url, download=True)
         filename = ydl.prepare_filename(info).replace(".webm", ".wav").replace(".m4a", ".wav")
 
-    # Temporary cookies file cleanup
     if cookies_file and cookies_file != "cookies.txt":
         try:
             os.unlink(cookies_file)
