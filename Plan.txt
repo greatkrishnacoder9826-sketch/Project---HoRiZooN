@@ -1,0 +1,22 @@
+Transcribe Videos
+Summrise Videos
+Extract Items, actions
+Chat
+
+
+
+
+Requriments_
+    Python
+    Langchain
+    Whisper
+    MMistral 
+    Chroma DB
+
+
+--> Working 
+        => Input Data => Process To Audio => Transcribe => Translator => Make the Report => Output File 
+                                                ||
+        Working Of RAG
+        => Text Splitter => Embedding => ChromaDB => Chat
+        

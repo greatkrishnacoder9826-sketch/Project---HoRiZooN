@@ -1,0 +1,14 @@
+streamlit
+python-dotenv
+yt-dlp
+pydub
+langchain-core
+langchain-text-splitters
+langchain-chroma
+langchain-huggingface
+langchain-mistralai
+faster-whisper
+requests
+sentence-transformers
+torch
+torchaudio
