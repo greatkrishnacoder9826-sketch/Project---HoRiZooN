@@ -104,7 +104,7 @@ def download_youtube_audio(url: str) -> str:
         "ffmpeg_location": FFMPEG_PATH,
         "extractor_args": {
             "youtube": {
-                "player_client": ["ios", "android"],
+                "player_client": ["tv_embedded", "mweb"],
             }
         },
         "postprocessors": [
